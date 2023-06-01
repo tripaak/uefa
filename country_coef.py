@@ -2,17 +2,19 @@ import requests
 import csv
 import os
 import time
-import glob
-import pandas as pd
 import datetime
 
 
-def scrap():
-    start_year = 2010
-    end_year = 2023
+def scrap(start_year,end_year):
+    if start_year == end_year:
+        flag = start_year
+    else:
+        flag = 'tous'    
+
 
     for year in range(start_year,end_year+1):
         print(f"Scraping for year : {year}")
+
         url = f"https://comp.uefa.com/v2/coefficients?coefficientType=MEN_ASSOCIATION&coefficientRange=OVERALL&seasonYear={year}&page=1&pagesize=500&language=EN"
 
         payload={}
@@ -32,61 +34,58 @@ def scrap():
 
         response = requests.request("GET", url, headers=headers, data=payload)
 
-        response = requests.request("GET", url, headers=headers, data=payload)
-
         response = response.json()
         data = response['data']['members']
 
-
         for member in data:
             item = {}
-            item['country'] = member['member']['displayOfficialName']
-            item['id_country'] = member['member']['associationId']
-            # item['pos'] = member['overallRanking']['position']
-            session = f"{year-4}/{year}"
-            # numberOfTeamsStillInPlaying = member['overallRanking']['numberOfTeamsStillInPlaying']
-            # numberOfTeams = member['overallRanking']['numberOfTeams']
-            # if numberOfTeamsStillInPlaying == 0:
-            #     item['clubs'] = numberOfTeams
-            # else:
-            #     item['clubs'] = str(f"{numberOfTeamsStillInPlaying}/{numberOfTeams}")
-            item[session] = member['overallRanking']['totalPoints']
-
+            item['country_UEFA'] = member['member']['displayOfficialName']
+            item['country_id_UEFA'] = member['member']['associationId']
+            item['Note_UEFA'] = member['overallRanking']['totalPoints']
+            item['seasonId']= year-1
+            item['seasonName']= f"{year-1}-{year}"
+            item['last_updated_UEFA'] = datetime.datetime.today().strftime('%d/%m/%Y')
+            item['coef_UEFA'] = None
+            
             for season in member['seasonRankings']:
                 if season['seasonYear'] == year:
-                    item[season['seasonYear']]= season['totalPoints']
+                    item['coef_UEFA'] = season['totalPoints']
 
-            
-            
-            is_file_exist = os.path.exists(f'country/country_coef_saison_{year}.csv')
+            is_file_exist = os.path.exists(f"country/country_coef_{flag}_{datetime.datetime.today().strftime('%d-%m-%Y')}.csv")
             is_folder_exist = os.path.exists(os.path.join(os.getcwd(),'country'))
+
             if not is_folder_exist:
                 try:
                     os.mkdir(os.path.join(os.getcwd(),'country'))
                 except:
-                    print('Directory creation error . continuing ..')    
-            with open(f'country/country_coef_saison_{year}.csv','a',encoding='utf8',newline='') as fle:
-                writer = csv.DictWriter(fle,delimiter=';',fieldnames=['id_country','country',year,session])
+                    print('Directory creation error . continuing ..') 
+
+            with open(f"country/country_coef_{flag}_{datetime.datetime.today().strftime('%d-%m-%Y')}.csv",'a',encoding='utf8',newline='') as fle:
+                writer = csv.DictWriter(fle,delimiter=';',fieldnames=['seasonId','seasonName','coef_UEFA','Note_UEFA','country_id_UEFA','country_UEFA','last_updated_UEFA'])
                 if not is_file_exist:
                     writer.writeheader()
-                writer.writerow(item)
-        time.sleep(4)
+                writer.writerow(item)   
+        time.sleep(4) 
+        
 
-
-def process():
-    print("Merging all files to single file ")
-    filelist = glob.glob('./country/*.csv')
-    merged_df = pd.read_csv(filelist[0],delimiter=';')
-
-    for filename in filelist:
-        df = pd.read_csv(filename,delimiter=';')
-        merged_df = pd.merge(merged_df, df, how = 'outer')
-
-    merged_df['last_updated'] = datetime.datetime.today().strftime('%d/%m/%Y')
-    merged_df.to_csv('./country/Final_country_coef_2010-2023.csv',sep=';',index=False)
 
 if __name__ == '__main__':
     if os.path.exists(os.path.join(os.getcwd(),'country')):
-        os.rename(os.path.join(os.getcwd(),'country'),os.path.join(os.getcwd(),f"country_backup_{datetime.datetime.today().strftime('%d-%m-%Y%H%M%S')}"))
-    scrap()
-    process()    
+        print("Sauvegarde d'un ancien dossier" )
+        os.rename(os.path.join(os.getcwd(),'country'),os.path.join(os.getcwd(),f"country_backup_{datetime.datetime.today().strftime('%d-%m-%Y.%H%M%S')}"))
+    
+    print("Choix de l'opération: \n")
+    print(" 1 - Extraction de toutes les données \n")
+    print(" 2 - Extraction des données pour une année spécifique \n")
+    
+    choice = ["-1"]
+    while choice not in ["1","2"]:
+        choice =input("Entrez le choix de l'opération : ")
+    if choice=="1":
+        start_year = 2010
+        end_year = 2023
+        scrap(start_year,end_year)
+    elif choice=="2":
+        start_year = int(input("Indiquer l'année: "))
+        end_year = start_year
+        scrap(start_year,end_year)
